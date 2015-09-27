@@ -39,6 +39,12 @@ static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct light_state_t g_notification;
 static struct light_state_t g_battery;
 
+char const*const RED_TIME_ON_OFF_FILE
+        = "/sys/class/leds/red/time_on_off";
+
+char const*const RED_PATTERN_FILE
+        = "/sys/class/leds/red/pattern_id";
+
 char const*const LCD_FILE
         = "/sys/class/leds/lcd-backlight/brightness";
 
