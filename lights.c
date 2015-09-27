@@ -48,6 +48,12 @@ char const*const RED_PATTERN_FILE
 char const*const LCD_FILE
         = "/sys/class/leds/lcd-backlight/brightness";
 
+enum LG_LED_PATTERN_ID {
+  ID_STOP = 0,
+  ID_CHARGING = 1,
+  ID_MISSED_NOTI = 2,
+};
+
 /**
  * device methods
  */
@@ -114,6 +120,7 @@ set_speaker_light_locked(struct light_device_t* dev,
         struct light_state_t const* state)
 {
     int onMS, offMS;
+    unsigned pattern_id = ID_STOP
 
     if(!dev) {
         return -1;
@@ -125,6 +132,7 @@ set_speaker_light_locked(struct light_device_t* dev,
             offMS = state->flashOffMS;
             break;
         case LIGHT_FLASH_NONE:
+            write_int(RED_PATTERN_FILE, pattern_id);
         default:
             onMS = 0;
             offMS = 0;
