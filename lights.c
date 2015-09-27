@@ -48,6 +48,9 @@ char const*const RED_PATTERN_FILE
 char const*const LCD_FILE
         = "/sys/class/leds/lcd-backlight/brightness";
 
+/**
+ * This pattern is written in sys/class/leds/red/pattern_id.
+ */
 enum LG_LED_PATTERN_ID {
   ID_STOP = 0,
   ID_CHARGING = 1,
@@ -87,6 +90,28 @@ write_int(char const* path, int value)
 }
 
 static int
+write_str(char const* path, char *value)
+{
+    int fd;
+    static int already_warned = 0;
+
+    fd = open(path, O_RDWR);
+    if (fd >= 0) {
+        char buffer[PAGE_SIZE];
+        int bytes = sprintf(buffer, "%s\n", value);
+        int amt = write(fd, buffer, bytes);
+        close(fd);
+        return amt == -1 ? -errno : 0;
+    } else {
+        if (already_warned == 0) {
+            ALOGE("write_str failed to open %s\n", path);
+            already_warned = 1;
+        }
+        return -errno;
+    }
+}
+
+static int
 is_lit(struct light_state_t const* state)
 {
     return state->color & 0x00ffffff;
@@ -119,8 +144,10 @@ static int
 set_speaker_light_locked(struct light_device_t* dev,
         struct light_state_t const* state)
 {
+    int blink;
     int onMS, offMS;
-    unsigned pattern_id = ID_STOP
+    char time_on_off[PAGE_SIZE];
+    unsigned int pattern_id = ID_CHARGING;
 
     if(!dev) {
         return -1;
@@ -132,11 +159,32 @@ set_speaker_light_locked(struct light_device_t* dev,
             offMS = state->flashOffMS;
             break;
         case LIGHT_FLASH_NONE:
-            write_int(RED_PATTERN_FILE, pattern_id);
         default:
             onMS = 0;
             offMS = 0;
             break;
+    }
+
+    ALOGD("set_light_notifications : flashMode=%d, pattern_id=%d, onMS=%d, offMS=%d\n",
+            state->flashMode, pattern_id, onMS, offMS);
+
+    if (onMS > 0 && offMS > 0) {
+        pattern_id = ID_MISSED_NOTI;
+    } else if (onMS = 0 && offMS = 0) {
+        pattern_id = ID_STOP;
+    }
+
+    if (pattern_id == ID_MISSED_NOTI) {
+        // blink if onMS & offMS > 0
+        write_int(RED_PATTERN_FILE, pattern_id);
+	}
+    } else if (pattern_id == ID_STOP) {
+        // stop LED if onMS & offMS = 0
+        write_int(RED_PATTERN_FILE, pattern_id);
+    }
+    } else {
+        // assume it's charging
+        write_int(RED_PATTERN_FILE, pattern_id);
     }
 
     return 0;
