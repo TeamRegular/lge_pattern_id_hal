@@ -38,34 +38,9 @@ static pthread_once_t g_init = PTHREAD_ONCE_INIT;
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct light_state_t g_notification;
 static struct light_state_t g_battery;
-static int g_attention = 0;
-
-char const*const RED_LED_FILE
-        = "/sys/class/leds/red/brightness";
-
-char const*const GREEN_LED_FILE
-        = "/sys/class/leds/green/brightness";
-
-char const*const BLUE_LED_FILE
-        = "/sys/class/leds/blue/brightness";
-
-char const*const BLUETOOTH_LED_FILE
-        = "/sys/class/leds/bt/brightness";
 
 char const*const LCD_FILE
         = "/sys/class/leds/lcd-backlight/brightness";
-
-char const*const BUTTON_FILE
-        = "/sys/class/leds/button-backlight/brightness";
-
-char const*const RED_BLINK_FILE
-        = "/sys/class/leds/red/blink";
-
-char const*const GREEN_BLINK_FILE
-        = "/sys/class/leds/green/blink";
-
-char const*const BLUE_BLINK_FILE
-        = "/sys/class/leds/blue/blink";
 
 /**
  * device methods
@@ -132,10 +107,7 @@ static int
 set_speaker_light_locked(struct light_device_t* dev,
         struct light_state_t const* state)
 {
-    int red, green, blue;
-    int blink;
     int onMS, offMS;
-    unsigned int colorRGB;
 
     if(!dev) {
         return -1;
@@ -151,42 +123,6 @@ set_speaker_light_locked(struct light_device_t* dev,
             onMS = 0;
             offMS = 0;
             break;
-    }
-
-    colorRGB = state->color;
-
-#if 0
-    ALOGD("set_speaker_light_locked mode %d, colorRGB=%08X, onMS=%d, offMS=%d\n",
-            state->flashMode, colorRGB, onMS, offMS);
-#endif
-
-    red = (colorRGB >> 16) & 0xFF;
-    green = (colorRGB >> 8) & 0xFF;
-    blue = colorRGB & 0xFF;
-
-    if (onMS > 0 && offMS > 0) {
-        blink = 1;
-    } else {
-        blink = 0;
-    }
-
-    if (blink) {
-        if (red) {
-            if (write_int(RED_BLINK_FILE, blink))
-                write_int(RED_LED_FILE, 0);
-	}
-        if (green) {
-            if (write_int(GREEN_BLINK_FILE, blink))
-                write_int(GREEN_LED_FILE, 0);
-	}
-        if (blue) {
-            if (write_int(BLUE_BLINK_FILE, blink))
-                write_int(BLUE_LED_FILE, 0);
-	}
-    } else {
-        write_int(RED_LED_FILE, red);
-        write_int(GREEN_LED_FILE, green);
-        write_int(BLUE_LED_FILE, blue);
     }
 
     return 0;
@@ -224,49 +160,6 @@ set_light_notifications(struct light_device_t* dev,
     return 0;
 }
 
-static int
-set_light_attention(struct light_device_t* dev,
-        struct light_state_t const* state)
-{
-    pthread_mutex_lock(&g_lock);
-    if (state->flashMode == LIGHT_FLASH_HARDWARE) {
-        g_attention = state->flashOnMS;
-    } else if (state->flashMode == LIGHT_FLASH_NONE) {
-        g_attention = 0;
-    }
-    handle_speaker_battery_locked(dev);
-    pthread_mutex_unlock(&g_lock);
-    return 0;
-}
-
-static int
-set_light_buttons(struct light_device_t* dev,
-        struct light_state_t const* state)
-{
-    int err = 0;
-    if(!dev) {
-        return -1;
-    }
-    pthread_mutex_lock(&g_lock);
-    err = write_int(BUTTON_FILE, state->color & 0xFF);
-    pthread_mutex_unlock(&g_lock);
-    return err;
-}
-
-static int
-set_light_bluetooth(struct light_device_t* dev,
-        struct light_state_t const* state)
-{
-    int err = 0;
-    if(!dev) {
-        return -1;
-    }
-    pthread_mutex_lock(&g_lock);
-    err = write_int(BLUETOOTH_LED_FILE, state->color & 0xFF);
-    pthread_mutex_unlock(&g_lock);
-    return err;
-}
-
 /** Close the lights device */
 static int
 close_lights(struct light_device_t *dev)
@@ -297,12 +190,6 @@ static int open_lights(const struct hw_module_t* module, char const* name,
         set_light = set_light_battery;
     else if (0 == strcmp(LIGHT_ID_NOTIFICATIONS, name))
         set_light = set_light_notifications;
-    else if (0 == strcmp(LIGHT_ID_BUTTONS, name))
-        set_light = set_light_buttons;
-    else if (0 == strcmp(LIGHT_ID_ATTENTION, name))
-        set_light = set_light_attention;
-    else if (0 == strcmp(LIGHT_ID_BLUETOOTH, name))
-        set_light = set_light_bluetooth;
     else
         return -EINVAL;
 
