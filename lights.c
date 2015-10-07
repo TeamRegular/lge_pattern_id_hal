@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008 The Android Open Source Project
- * Copyright (C) 2014 The  Linux Foundation. All rights reserved.
+ * Copyright 2015 The CyanogenMod Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +14,7 @@
  * limitations under the License.
  */
 
-
-// #define LOG_NDEBUG 0
+#define LOG_TAG "lights"
 
 #include <cutils/log.h>
 
@@ -41,6 +39,9 @@ static struct light_state_t g_battery;
 
 char const*const RED_TIME_ON_OFF_FILE
         = "/sys/class/leds/red/time_on_off";
+
+char const*const RED_TIMED_FILE
+        = "/sys/class/leds/red/timed";
 
 char const*const RED_PATTERN_FILE
         = "/sys/class/leds/red/pattern_id";
@@ -90,21 +91,21 @@ write_int(char const* path, int value)
 }
 
 static int
-write_str(char const* path, char *value)
+write_on_off(char const* path, int on, int off)
 {
     int fd;
     static int already_warned = 0;
 
     fd = open(path, O_RDWR);
     if (fd >= 0) {
-        char buffer[PAGE_SIZE];
-        int bytes = sprintf(buffer, "%s\n", value);
+        char buffer[20];
+        int bytes = snprintf(buffer, sizeof(buffer), "%d %d\n", on, off);
         int amt = write(fd, buffer, bytes);
         close(fd);
         return amt == -1 ? -errno : 0;
     } else {
         if (already_warned == 0) {
-            ALOGE("write_str failed to open %s\n", path);
+            ALOGE("write_on_off failed to open %s\n", path);
             already_warned = 1;
         }
         return -errno;
@@ -144,9 +145,7 @@ static int
 set_speaker_light_locked(struct light_device_t* dev,
         struct light_state_t const* state)
 {
-    int blink;
     int onMS, offMS;
-    char time_on_off[PAGE_SIZE];
     unsigned int pattern_id = ID_CHARGING;
 
     if(!dev) {
@@ -155,6 +154,7 @@ set_speaker_light_locked(struct light_device_t* dev,
 
     switch (state->flashMode) {
         case LIGHT_FLASH_TIMED:
+        case LIGHT_FLASH_HARDWARE:
             onMS = state->flashOnMS;
             offMS = state->flashOffMS;
             break;
@@ -165,26 +165,28 @@ set_speaker_light_locked(struct light_device_t* dev,
             break;
     }
 
-    ALOGD("set_light_notifications : flashMode=%d, pattern_id=%d, onMS=%d, offMS=%d\n",
+    ALOGD("set_speaker_light_locked mode %d, pattern_id=%d, onMS=%d, offMS=%d\n",
             state->flashMode, pattern_id, onMS, offMS);
 
+    // Set the pattern id
     if (onMS > 0 && offMS > 0) {
         pattern_id = ID_MISSED_NOTI;
-    } else if (onMS = 0 && offMS = 0) {
+    } else if (onMS == 0 && offMS == 0) {
         pattern_id = ID_STOP;
     }
 
     if (pattern_id == ID_MISSED_NOTI) {
-        // blink if onMS & offMS > 0
+        // Set missed notification LED
         write_int(RED_PATTERN_FILE, pattern_id);
-	}
+        write_on_off(RED_TIME_ON_OFF_FILE, onMS, offMS);
     } else if (pattern_id == ID_STOP) {
-        // stop LED if onMS & offMS = 0
+        // Set notification LED off
         write_int(RED_PATTERN_FILE, pattern_id);
-    }
-    } else {
-        // assume it's charging
+        write_on_off(RED_TIME_ON_OFF_FILE, onMS, offMS);
+    } else if (pattern_id == ID_CHARGING) {
+        // Set charging notification LED
         write_int(RED_PATTERN_FILE, pattern_id);
+        write_on_off(RED_TIME_ON_OFF_FILE, onMS, offMS);
     }
 
     return 0;
